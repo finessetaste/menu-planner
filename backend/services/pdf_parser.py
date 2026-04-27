@@ -287,26 +287,70 @@ def _parse_text(pdf_path: str) -> list[dict]:
 # ── Image extraction ──────────────────────────────────────────────────────────
 
 def _extract_images(pdf_path: str, photos_dir: str) -> dict[int, list[str]]:
+    """
+    Dual-method extraction for Canva PDFs:
+    1. page.get_text("dict") image blocks — captures rendered images by position
+    2. page.get_images() XObjects — fallback for traditionally embedded images
+    """
     page_images: dict[int, list[str]] = {}
     doc = fitz.open(pdf_path)
+
     for page_num, page in enumerate(doc, start=1):
         saved: list[str] = []
-        for img_index, img in enumerate(page.get_images(full=True)):
-            xref = img[0]
-            try:
-                base = doc.extract_image(xref)
-                pil = Image.open(io.BytesIO(base["image"]))
-                w, h = pil.size
+        seen_bytes: set[int] = set()  # deduplicate by content hash
+
+        # ── Method 1: rendered image blocks (works for Canva) ────────────────
+        try:
+            for block in page.get_text("dict").get("blocks", []):
+                if block.get("type") != 1:
+                    continue
+                w = block.get("width", 0)
+                h = block.get("height", 0)
                 if w < MIN_IMAGE_DIM or h < MIN_IMAGE_DIM:
                     continue
-                fname = f"p{page_num}_i{img_index + 1}.{base['ext']}"
-                with open(os.path.join(photos_dir, fname), "wb") as f:
-                    f.write(base["image"])
-                saved.append(fname)
-            except Exception:
-                continue
+                img_bytes = block.get("image", b"")
+                if not img_bytes:
+                    continue
+                h_id = hash(img_bytes)
+                if h_id in seen_bytes:
+                    continue
+                seen_bytes.add(h_id)
+                try:
+                    pil = Image.open(io.BytesIO(img_bytes))
+                    ext = (pil.format or "jpeg").lower()
+                    fname = f"p{page_num}_b{len(saved) + 1}.{ext}"
+                    pil.save(os.path.join(photos_dir, fname))
+                    saved.append(fname)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # ── Method 2: XObject images (fallback) ──────────────────────────────
+        if not saved:
+            for img_index, img in enumerate(page.get_images(full=True)):
+                xref = img[0]
+                try:
+                    base = doc.extract_image(xref)
+                    img_bytes = base["image"]
+                    h_id = hash(img_bytes)
+                    if h_id in seen_bytes:
+                        continue
+                    seen_bytes.add(h_id)
+                    pil = Image.open(io.BytesIO(img_bytes))
+                    w, h = pil.size
+                    if w < MIN_IMAGE_DIM or h < MIN_IMAGE_DIM:
+                        continue
+                    fname = f"p{page_num}_i{img_index + 1}.{base['ext']}"
+                    with open(os.path.join(photos_dir, fname), "wb") as f:
+                        f.write(img_bytes)
+                    saved.append(fname)
+                except Exception:
+                    continue
+
         if saved:
             page_images[page_num] = saved
+
     doc.close()
     return page_images
 
