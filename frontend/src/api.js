@@ -60,4 +60,13 @@ export const api = {
     get: ()      => req("GET", "/config/"),
     set: (data)  => req("PUT", "/config/", data),
   },
+
+  girlsDinners: {
+    status:      ()              => req("GET", "/girls-dinners/status"),
+    suggestions: (ws)            => req("GET", `/girls-dinners/suggestions?week_start=${ws || ""}`),
+    select:      (girl, day, desc) =>
+      req("PUT", `/girls-dinners/select?girl=${girl}&day=${day}&dinner_description=${encodeURIComponent(desc)}`),
+    getConfig:   ()              => req("GET", "/girls-dinners/config"),
+    setConfig:   (data)          => req("PUT", "/girls-dinners/config", data),
+  },
 };

@@ -4,6 +4,7 @@ import RecipesPage from "./pages/RecipesPage";
 import WeeklyPlanPage from "./pages/WeeklyPlanPage";
 import ShoppingListPage from "./pages/ShoppingListPage";
 import SettingsPage from "./pages/SettingsPage";
+import GirlsDinnersPage from "./pages/GirlsDinnersPage";
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="/"            element={<Navigate to="/recetas" replace />} />
           <Route path="/recetas"     element={<RecipesPage />} />
           <Route path="/plan"        element={<WeeklyPlanPage />} />
+          <Route path="/cenas-ninas" element={<GirlsDinnersPage />} />
           <Route path="/compra"      element={<ShoppingListPage />} />
           <Route path="/ajustes"     element={<SettingsPage />} />
         </Routes>

@@ -1,10 +1,11 @@
 import { NavLink } from "react-router-dom";
 
 const links = [
-  { to: "/recetas", icon: "📋", label: "Recetas" },
-  { to: "/plan",    icon: "📅", label: "Plan" },
-  { to: "/compra",  icon: "🛒", label: "Compra" },
-  { to: "/ajustes", icon: "⚙️", label: "Ajustes" },
+  { to: "/recetas",      icon: "📋", label: "Recetas" },
+  { to: "/plan",         icon: "📅", label: "Mi Plan" },
+  { to: "/cenas-ninas",  icon: "👧", label: "Niñas" },
+  { to: "/compra",       icon: "🛒", label: "Compra" },
+  { to: "/ajustes",      icon: "⚙️", label: "Ajustes" },
 ];
 
 export default function Navbar() {

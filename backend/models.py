@@ -75,3 +75,24 @@ class ShoppingItem(Base):
     unidad = Column(String, nullable=True)
     is_checked = Column(Boolean, default=False)
     is_manual = Column(Boolean, default=False)
+
+
+# ── Module 2 ──────────────────────────────────────────────────────────────────
+
+class SchoolMeal(Base):
+    __tablename__ = "school_meals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    girl = Column(String, nullable=False)       # "girl1" | "girl2"
+    date = Column(String, nullable=False)       # YYYY-MM-DD
+    meal_type = Column(String, nullable=False)  # "lunch" | "dinner"
+    description = Column(String, nullable=False)
+
+
+class GirlDinnerSelection(Base):
+    __tablename__ = "girl_dinner_selections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    girl = Column(String, nullable=False)
+    date = Column(String, nullable=False)
+    dinner_description = Column(String, nullable=True)

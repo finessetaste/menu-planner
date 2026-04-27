@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from database import engine, Base
-from routers import recipes, weekly_plan, shopping, config, pdf_upload
+from routers import recipes, weekly_plan, shopping, config, pdf_upload, girls_dinners
 
 
 @asynccontextmanager
@@ -20,7 +20,8 @@ app.include_router(recipes.router,     prefix="/api/recipes",     tags=["recipes
 app.include_router(weekly_plan.router, prefix="/api/weekly-plan", tags=["weekly-plan"])
 app.include_router(shopping.router,    prefix="/api/shopping",    tags=["shopping"])
 app.include_router(config.router,      prefix="/api/config",      tags=["config"])
-app.include_router(pdf_upload.router,  prefix="/api/pdf",         tags=["pdf"])
+app.include_router(pdf_upload.router,    prefix="/api/pdf",           tags=["pdf"])
+app.include_router(girls_dinners.router, prefix="/api/girls-dinners", tags=["girls-dinners"])
 
 # Serve recipe photos
 app.mount("/photos", StaticFiles(directory="static/photos"), name="photos")
