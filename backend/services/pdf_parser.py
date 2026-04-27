@@ -152,14 +152,22 @@ def _is_ingredient(line: str) -> bool:
 
 
 def _is_title(line: str) -> bool:
-    if len(line) < 3 or len(line) > 80:
+    stripped = line.strip()
+    if len(stripped) < 3 or len(stripped) > 100:
         return False
-    if not any(c.isalpha() for c in line):
+    alpha = [c for c in stripped if c.isalpha()]
+    if not alpha:
         return False
-    if line.replace(".", "").replace(",", "").isdigit():
+    # Recipe titles in this PDF are ALL CAPS (Canva layout)
+    upper_ratio = sum(1 for c in alpha if c.isupper()) / len(alpha)
+    if upper_ratio < 0.8:
         return False
-    ll = line.lower()
-    if any(ll.startswith(kw) for kw in PREP_KEYWORDS):
+    # Exclude known section / subsection keywords (handled upstream)
+    lu = stripped.upper()
+    if lu in MEAL_SECTIONS:
+        return False
+    clean = re.sub(r"[^A-ZÁÉÍÓÚÑ\s]", "", lu).strip()
+    if clean in KNOWN_SUBTIPOS and len(stripped) < 25:
         return False
     return True
 
