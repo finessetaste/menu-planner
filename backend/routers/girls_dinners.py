@@ -27,6 +27,60 @@ _ingest_status: dict[str, dict] = {
 
 # ── Debug ─────────────────────────────────────────────────────────────────────
 
+@router.post("/test-parse")
+async def test_parse(file: UploadFile = File(...)):
+    """Run parse_school_pdf and return raw results + intermediate debug info."""
+    import pdfplumber, tempfile, os
+    from services.school_pdf_parser import (
+        parse_school_pdf, _detect_year_month, _find_day_columns,
+        _find_header_row_idx, _group_rows_into_weeks
+    )
+    content = await file.read()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    tmp.write(content); tmp.close()
+    try:
+        # Run full parse
+        meals = parse_school_pdf(tmp.name)
+
+        # Also show page-level debug
+        pages_info = []
+        with pdfplumber.open(tmp.name) as pdf:
+            all_text = " ".join(p.extract_text() or "" for p in pdf.pages)
+            global_yr, global_month = _detect_year_month(all_text, None)
+            for i, page in enumerate(pdf.pages[:2]):
+                text = page.extract_text() or ""
+                yr, month = _detect_year_month(text, None)
+                if not month:
+                    yr, month = global_yr, global_month
+                tables = page.extract_tables()
+                valid = [t for t in tables if _find_day_columns(t)]
+                col_map = _find_day_columns(valid[0]) if valid else {}
+                week_blocks = []
+                if valid:
+                    hdr = _find_header_row_idx(valid[0])
+                    week_blocks = _group_rows_into_weeks(valid[0][hdr+1:], col_map)
+                pages_info.append({
+                    "page": i,
+                    "yr": yr, "month": month,
+                    "col_map": col_map,
+                    "week_block_count": len(week_blocks),
+                    "week_blocks_preview": [
+                        {str(k): v[:80] for k, v in wb.items() if v}
+                        for wb in week_blocks[:3]
+                    ],
+                })
+
+        return {
+            "meal_count": len(meals),
+            "meals_preview": meals[:5],
+            "global_yr": global_yr,
+            "global_month": global_month,
+            "pages": pages_info,
+        }
+    finally:
+        os.unlink(tmp.name)
+
+
 @router.post("/debug-pdf")
 async def debug_pdf(file: UploadFile = File(...)):
     """Return raw pdfplumber extraction info to diagnose parse failures."""
