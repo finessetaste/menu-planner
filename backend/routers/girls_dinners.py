@@ -41,6 +41,13 @@ async def debug_pdf(file: UploadFile = File(...)):
             for i, page in enumerate(pdf.pages):
                 text = page.extract_text() or ""
                 tables = page.extract_tables()
+                words = page.extract_words(keep_blank_chars=True, x_tolerance=3, y_tolerance=3)
+                # Find which words look like day headers
+                day_header_words = [
+                    w for w in words
+                    if w["text"].strip().upper().replace("\n", " ")
+                    in {"LUNES","MARTES","MIÉRCOLES","MIERCOLES","JUEVES","VIERNES"}
+                ]
                 info.append({
                     "page": i,
                     "text_snippet": text[:500],
@@ -49,6 +56,9 @@ async def debug_pdf(file: UploadFile = File(...)):
                         {"rows": len(t), "first_3_rows": t[:3]}
                         for t in tables
                     ],
+                    "word_count": len(words),
+                    "first_20_words": [w["text"] for w in words[:20]],
+                    "day_header_words_found": day_header_words,
                 })
             info.append({"all_text_snippet": all_text[:800]})
     finally:
