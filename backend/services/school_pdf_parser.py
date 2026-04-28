@@ -19,6 +19,12 @@ MONTHS_ES = {
     "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
 }
 
+MONTHS_EN = {
+    "january": 1, "february": 2, "march": 3, "april": 4,
+    "may": 5, "june": 6, "july": 7, "august": 8,
+    "september": 9, "october": 10, "november": 11, "december": 12,
+}
+
 DAY_COLS = {
     "LUNES": 0, "MARTES": 1,
     "MIÉRCOLES": 2, "MIERCOLES": 2,
@@ -154,6 +160,9 @@ def _detect_year_month(text: str, override_year: int | None) -> tuple[int, int |
     yr_m = re.search(r"\b(20\d{2})\b", tl)
     yr = int(yr_m.group(1)) if yr_m else (override_year or date.today().year)
     for name, num in MONTHS_ES.items():
+        if name in tl:
+            return yr, num
+    for name, num in MONTHS_EN.items():
         if name in tl:
             return yr, num
     return yr, None
