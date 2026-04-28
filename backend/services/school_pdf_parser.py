@@ -227,15 +227,37 @@ def _group_rows_into_weeks(
     A new week block starts when any day-column cell is a pure 1-2 digit number
     (i.e. the day-number header row of that week).
 
+    Content text may land in sub-columns within each day's column span
+    (pdfplumber models merged cells as multiple columns), so we collect
+    all values within the range [col_start, next_col_start).
+
     Returns a list of dicts: {col_idx: joined_cell_text}
     """
     _PURE_NUM = re.compile(r"^\s*\d{1,2}\s*$")
 
+    # Build column-span ranges: LUNES at col 1, MARTES at col 7 → LUNES = cols 1–6
+    sorted_cols = sorted(col_map.keys())
+    row_width = len(data_rows[0]) if data_rows else 30
+    col_spans: dict[int, range] = {}
+    for i, ci in enumerate(sorted_cols):
+        next_ci = sorted_cols[i + 1] if i + 1 < len(sorted_cols) else row_width
+        col_spans[ci] = range(ci, next_ci)
+
     def _has_day_numbers(row: list) -> bool:
+        """True when the day-header col itself holds a pure 1-2 digit number."""
         return any(
             ci < len(row) and row[ci] and _PURE_NUM.match(str(row[ci]).strip())
             for ci in col_map
         )
+
+    def _collect_span(row: list, ci: int) -> str:
+        """Concatenate all non-empty values within a day's column span."""
+        parts = []
+        for sub in col_spans[ci]:
+            val = row[sub] if sub < len(row) else None
+            if val and str(val).strip():
+                parts.append(str(val).strip())
+        return " ".join(parts)
 
     weeks: list[dict[int, list[str]]] = []
     current: dict[int, list[str]] | None = None
@@ -250,9 +272,9 @@ def _group_rows_into_weeks(
             continue  # skip pre-week header rows
 
         for ci in col_map:
-            val = row[ci] if ci < len(row) else None
-            if val and str(val).strip():
-                current[ci].append(str(val).strip())
+            text = _collect_span(row, ci)
+            if text:
+                current[ci].append(text)
 
     if current is not None:
         weeks.append(current)
