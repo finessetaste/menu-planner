@@ -28,19 +28,24 @@ DAY_COLS = {
 DINNER_KEYWORDS = {"cena", "cenas", "dinner", "merienda-cena"}
 LUNCH_KEYWORDS  = {"comida", "comidas", "almuerzo", "lunch", "comedor"}
 
-# Patterns to REMOVE from cell text
-STRIP_RES = [
-    re.compile(r"\d+\s*[Kk]cal.*"),                          # calorie lines
-    re.compile(r"\bFRUTA\s+DE\s+TEMPORADA.*", re.IGNORECASE),
-    re.compile(r"^FRUTA$", re.IGNORECASE | re.MULTILINE),    # standalone FRUTA
-    re.compile(r"\bPAN\s+INTEGRAL.*", re.IGNORECASE),
-    re.compile(r"\bPAN\b.*\bAGUA\b.*", re.IGNORECASE),
-    re.compile(r"\bY\s+AGUA\b.*", re.IGNORECASE),
-    re.compile(r"EN\s+TODAS\s+LAS\s+CENAS.*", re.IGNORECASE),
-    re.compile(r"DÍA\s+(MUNDIAL|INTERNACIONAL|NACIONAL|DEL).*", re.IGNORECASE),
-    re.compile(r"VACACIONES.*", re.IGNORECASE),
-    re.compile(r"DÍA\s+NO\s+LECTIVO.*", re.IGNORECASE),
-    re.compile(r"^\s*[\d\s]+$"),                              # lines of only digits/spaces
+# Lines that signal END of main dish — stop collecting here
+STOP_RES = [
+    re.compile(r"\bFRUTA\b", re.IGNORECASE),           # fruit of any kind
+    re.compile(r"\d+\s*[Kk]cal"),                      # calorie line
+    re.compile(r"\bPAN\b.*\bAGUA\b", re.IGNORECASE),
+    re.compile(r"\bY\s+AGUA\b", re.IGNORECASE),
+    re.compile(r"\bPAN\s+INTEGRAL\b", re.IGNORECASE),
+    re.compile(r"\bYOGUR\b", re.IGNORECASE),
+    re.compile(r"\bNATILLAS\b|\bHELADO\b|\bGELATINA\b|\bFLAN\b|\bMACEDONIA\b", re.IGNORECASE),
+    re.compile(r"EN\s+TODAS\s+LAS\s+CENAS", re.IGNORECASE),
+]
+
+# Lines to SKIP entirely (don't stop, just drop this line)
+SKIP_RES = [
+    re.compile(r"DÍA\s+(MUNDIAL|INTERNACIONAL|NACIONAL|DEL)\b", re.IGNORECASE),
+    re.compile(r"VACACIONES\b", re.IGNORECASE),
+    re.compile(r"DÍA\s+NO\s+LECTIVO\b", re.IGNORECASE),
+    re.compile(r"^\s*[\d\s]+$"),   # only digits/spaces
 ]
 
 KCAL_RE    = re.compile(r"\d+\s*[Kk]cal")
@@ -205,6 +210,10 @@ def _extract_day_number(text: str) -> int | None:
 
 
 def _extract_description(text: str) -> str:
+    """
+    Keep only the main dish — stop at first fruit/dessert/calorie line.
+    Skip event-header lines without stopping.
+    """
     lines = text.splitlines()
     cleaned: list[str] = []
 
@@ -212,21 +221,22 @@ def _extract_description(text: str) -> str:
         line = line.strip()
         if not line:
             continue
-        skip = False
-        for pat in STRIP_RES:
-            if pat.search(line):
-                skip = True
-                break
-        if skip:
+
+        # Skip-only lines (event headers etc.)
+        if any(p.search(line) for p in SKIP_RES):
             continue
         if re.fullmatch(r"\d{1,2}", line):   # bare day number
             continue
         if len(line) < 3:
             continue
+
+        # Stop collecting at fruit/dessert/calorie
+        if any(p.search(line) for p in STOP_RES):
+            break
+
         cleaned.append(line)
 
     desc = " ".join(cleaned).strip()
-    # Remove any leading day number
-    desc = re.sub(r"^\d{1,2}\s+", "", desc).strip()
+    desc = re.sub(r"^\d{1,2}\s+", "", desc).strip()   # remove leading day number
     desc = re.sub(r"\s{2,}", " ", desc)
     return desc if len(desc) > 3 else ""
