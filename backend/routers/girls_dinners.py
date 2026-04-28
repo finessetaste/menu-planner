@@ -25,6 +25,37 @@ _ingest_status: dict[str, dict] = {
 }
 
 
+# ── Debug ─────────────────────────────────────────────────────────────────────
+
+@router.post("/debug-pdf")
+async def debug_pdf(file: UploadFile = File(...)):
+    """Return raw pdfplumber extraction info to diagnose parse failures."""
+    import pdfplumber, tempfile, os
+    content = await file.read()
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    tmp.write(content); tmp.close()
+    info = []
+    try:
+        with pdfplumber.open(tmp.name) as pdf:
+            all_text = " ".join(p.extract_text() or "" for p in pdf.pages)
+            for i, page in enumerate(pdf.pages):
+                text = page.extract_text() or ""
+                tables = page.extract_tables()
+                info.append({
+                    "page": i,
+                    "text_snippet": text[:500],
+                    "table_count": len(tables),
+                    "tables": [
+                        {"rows": len(t), "first_3_rows": t[:3]}
+                        for t in tables
+                    ],
+                })
+            info.append({"all_text_snippet": all_text[:800]})
+    finally:
+        os.unlink(tmp.name)
+    return info
+
+
 # ── Upload ────────────────────────────────────────────────────────────────────
 
 @router.get("/status")
