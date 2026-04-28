@@ -99,26 +99,25 @@ def parse_school_pdf(
                 header_row_idx = _find_header_row_idx(table)
                 data_rows = table[header_row_idx + 1:]
 
-                for row_idx, row in enumerate(data_rows):
-                    for col_idx, weekday in col_map.items():
-                        if col_idx >= len(row):
-                            continue
-                        cell = row[col_idx]
-                        if not cell:
-                            continue
+                # Group flat pdfplumber rows into calendar-week blocks.
+                # pdfplumber splits merged cells: each text line → separate row.
+                # We must merge lines back into full cell text before date calc.
+                week_blocks = _group_rows_into_weeks(data_rows, col_map)
 
-                        cell_text = _normalize_cell(cell)
+                for week_idx, week_cells in enumerate(week_blocks):
+                    for col_idx, weekday in col_map.items():
+                        cell_text = _normalize_cell(week_cells.get(col_idx, ""))
+                        if not cell_text:
+                            continue
 
                         # ── Date from grid position ──────────────────────────
-                        grid_date = first_monday + timedelta(days=row_idx * 7 + weekday)
+                        grid_date = first_monday + timedelta(days=week_idx * 7 + weekday)
                         if grid_date.month != month:
                             continue  # outside this month
 
                         # ── Validate with day number if present ──────────────
                         day_num = _extract_day_number(cell_text)
                         if day_num and day_num != grid_date.day:
-                            # Try to find the matching row where day_num fits
-                            # (handles months that don't start on Monday)
                             try:
                                 explicit = date(yr, month, day_num)
                                 if explicit.weekday() == weekday:
@@ -206,6 +205,50 @@ def _norm_cell(cell) -> str:
     # Normalise common accent variants for matching
     return (s.replace("É", "É")   # keep — already in DAY_COLS
              .replace("\n", " "))
+
+
+def _group_rows_into_weeks(
+    data_rows: list[list],
+    col_map: dict[int, int],
+) -> list[dict[int, str]]:
+    """
+    pdfplumber splits each calendar cell across multiple table rows
+    (one text line per row).  Group them back into one block per calendar week.
+
+    A new week block starts when any day-column cell is a pure 1-2 digit number
+    (i.e. the day-number header row of that week).
+
+    Returns a list of dicts: {col_idx: joined_cell_text}
+    """
+    _PURE_NUM = re.compile(r"^\s*\d{1,2}\s*$")
+
+    def _has_day_numbers(row: list) -> bool:
+        return any(
+            ci < len(row) and row[ci] and _PURE_NUM.match(str(row[ci]).strip())
+            for ci in col_map
+        )
+
+    weeks: list[dict[int, list[str]]] = []
+    current: dict[int, list[str]] | None = None
+
+    for row in data_rows:
+        if _has_day_numbers(row):
+            if current is not None:
+                weeks.append(current)
+            current = {ci: [] for ci in col_map}
+
+        if current is None:
+            continue  # skip pre-week header rows
+
+        for ci in col_map:
+            val = row[ci] if ci < len(row) else None
+            if val and str(val).strip():
+                current[ci].append(str(val).strip())
+
+    if current is not None:
+        weeks.append(current)
+
+    return [{ci: "\n".join(lines) for ci, lines in week.items()} for week in weeks]
 
 
 def _words_to_table(page) -> list[list] | None:
