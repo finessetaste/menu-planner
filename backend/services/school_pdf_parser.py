@@ -79,11 +79,19 @@ def parse_school_pdf(
             meal_type = force_meal_type or _detect_meal_type(page_text, page_idx)
             first_monday = _first_monday_of_grid(yr, month)
 
+            # Try standard table extraction first; fall back to word-grid
             tables = page.extract_tables()
-            if not tables:
-                continue
+            valid_tables = [t for t in tables if _find_day_columns(t)]
+            if not valid_tables:
+                # Fallback: reconstruct grid from word bounding boxes
+                word_table = _words_to_table(page)
+                if word_table:
+                    tables = [word_table]
+                    valid_tables = [word_table]
+                else:
+                    continue
 
-            for table in tables:
+            for table in valid_tables:
                 col_map = _find_day_columns(table)
                 if not col_map:
                     continue
@@ -198,6 +206,145 @@ def _norm_cell(cell) -> str:
     # Normalise common accent variants for matching
     return (s.replace("É", "É")   # keep — already in DAY_COLS
              .replace("\n", " "))
+
+
+def _words_to_table(page) -> list[list] | None:
+    """
+    Reconstruct LUNES-VIERNES calendar grid from word bounding boxes.
+    Used when extract_tables() finds no valid table (colour-background PDFs).
+    Returns a 2-D list compatible with extract_tables() output, or None.
+    """
+    words = page.extract_words(keep_blank_chars=True, x_tolerance=3, y_tolerance=3)
+    if not words:
+        return None
+
+    # ── 1. Cluster words into columns by x-midpoint ───────────────────────────
+    # Find column centres by looking at the x-midpoints of day-header words first
+    day_header_words = [
+        w for w in words
+        if _norm_cell(w["text"]) in DAY_COLS
+    ]
+
+    if len(day_header_words) < 3:
+        # Can't identify columns — give up
+        return None
+
+    # Sort headers left-to-right; their x-midpoints define column centres
+    day_header_words.sort(key=lambda w: w["x0"])
+    col_centres = [(w["x0"] + w["x1"]) / 2 for w in day_header_words]
+
+    # Tolerance: half the minimum gap between adjacent centres
+    gaps = [col_centres[i+1] - col_centres[i] for i in range(len(col_centres)-1)]
+    tol = min(gaps) * 0.45 if gaps else 60
+
+    def _nearest_col(x_mid):
+        dists = [abs(x_mid - c) for c in col_centres]
+        best = min(dists)
+        return dists.index(best) if best <= tol else None
+
+    # ── 2. Cluster words into rows by top (y) coordinate ─────────────────────
+    # Group words whose tops are within ROW_TOL of each other
+    ROW_TOL = 6  # px — words on same visual line
+    words_sorted_y = sorted(words, key=lambda w: w["top"])
+
+    rows_y: list[list[dict]] = []
+    for w in words_sorted_y:
+        placed = False
+        for row in rows_y:
+            if abs(w["top"] - row[0]["top"]) <= ROW_TOL:
+                row.append(w)
+                placed = True
+                break
+        if not placed:
+            rows_y.append([w])
+
+    # ── 3. Build 2-D table: rows × columns ───────────────────────────────────
+    n_cols = len(col_centres)
+    table: list[list[str | None]] = []
+
+    for row_words in rows_y:
+        cells: list[str | None] = [None] * n_cols
+        for w in row_words:
+            x_mid = (w["x0"] + w["x1"]) / 2
+            ci = _nearest_col(x_mid)
+            if ci is None:
+                continue
+            txt = w["text"].strip()
+            if not txt:
+                continue
+            if cells[ci] is None:
+                cells[ci] = txt
+            else:
+                cells[ci] += " " + txt
+        table.append(cells)
+
+    if not table:
+        return None
+
+    # ── 4. Merge nearby rows into single multi-line cells ────────────────────
+    # Calendar cells span multiple text rows; merge rows that belong to the
+    # same cell block.  We split on rows where a day-header token appears.
+    # Strategy: find which row-indices are "header rows" (contain LUNES etc),
+    # then merge runs between headers into one logical row of joined text.
+    header_row_indices = set()
+    for ri, row in enumerate(table):
+        hits = sum(1 for c in row if c and _norm_cell(c) in DAY_COLS)
+        if hits >= 3:
+            header_row_indices.add(ri)
+
+    if not header_row_indices:
+        # No header row found — return flat table anyway (may still work)
+        return table if len(table) > 1 else None
+
+    # Find the first header row index
+    first_header = min(header_row_indices)
+
+    # Everything after the first header is data; group by visual cell blocks.
+    # We separate blocks wherever the leftmost non-None column cell starts with
+    # a 1-2 digit number (day number for lunch PDFs) OR by y-gap heuristic.
+    # Simpler: merge consecutive data rows into blocks of ~CELL_ROWS each.
+    # Use y-gap: find large gaps between row groups.
+    data_rows_raw = table[first_header + 1:]
+
+    # Calculate y-top for each raw row (use first word's top in that row — approximate)
+    # We'll use index-based merging: collect until a row looks like a new cell start.
+    # A new cell starts when ANY non-None cell matches r"^\s*\d{1,2}\b" (day number)
+    # or when all non-None cells are DAY_NAMES (shouldn't happen in data).
+
+    merged_data: list[list[str | None]] = []
+    current: list[str | None] = [None] * n_cols
+
+    def _is_cell_start(row):
+        """True if this row starts a new calendar cell (has a day number in col 0)."""
+        non_none = [c for c in row if c]
+        if not non_none:
+            return False
+        first_non_none = non_none[0]
+        return bool(re.match(r"^\s*\d{1,2}\b", first_non_none))
+
+    def _merge_into(target, src):
+        for i, val in enumerate(src):
+            if val:
+                if target[i] is None:
+                    target[i] = val
+                else:
+                    target[i] += "\n" + val
+
+    for row in data_rows_raw:
+        if _is_cell_start(row) and any(c is not None for c in current):
+            merged_data.append(current)
+            current = [None] * n_cols
+        _merge_into(current, row)
+
+    if any(c is not None for c in current):
+        merged_data.append(current)
+
+    # If merging produced nothing useful, fall back to raw data rows
+    if not merged_data:
+        merged_data = data_rows_raw
+
+    # Return header row + merged data rows
+    return [table[first_header]] + merged_data
 
 
 def _normalize_cell(cell) -> str:
