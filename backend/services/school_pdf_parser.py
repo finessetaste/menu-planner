@@ -73,7 +73,7 @@ def parse_school_pdf(
         all_text = " ".join(p.extract_text() or "" for p in pdf.pages)
         global_yr, global_month = _detect_year_month(all_text, year)
 
-        for page_idx, page in enumerate(pdf.pages):
+        for page_idx, page in enumerate(pdf.pages[:2]):
             page_text = page.extract_text() or ""
             yr, month = _detect_year_month(page_text, year)
             # Fall back to PDF-wide detection if this page has no month
