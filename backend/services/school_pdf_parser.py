@@ -36,23 +36,30 @@ LUNCH_KEYWORDS  = {"comida", "comidas", "almuerzo", "lunch", "comedor"}
 
 # Lines that signal END of main dish — stop collecting here
 STOP_RES = [
-    re.compile(r"\bFRUTA\b", re.IGNORECASE),           # fruit of any kind
-    re.compile(r"\d+\s*[Kk]cal"),                      # calorie line
+    re.compile(r"\bFRUTA\b", re.IGNORECASE),
+    re.compile(r"\d+\s*[Kk]cal"),
     re.compile(r"\bPAN\b.*\bAGUA\b", re.IGNORECASE),
     re.compile(r"\bY\s+AGUA\b", re.IGNORECASE),
     re.compile(r"\bPAN\s+INTEGRAL\b", re.IGNORECASE),
     re.compile(r"\bYOGUR\b", re.IGNORECASE),
-    re.compile(r"\bNATILLAS\b|\bHELADO\b|\bGELATINA\b|\bFLAN\b|\bMACEDONIA\b", re.IGNORECASE),
+    re.compile(r"\bNATILLAS?\b|\bHELADO\b|\bGELATINA\b|\bFLAN\b|\bMACEDONIA\b", re.IGNORECASE),
+    re.compile(r"\bMELOCOTÓN\b|\bCUAJADA\b|\bCOMPOTA\b", re.IGNORECASE),
     re.compile(r"EN\s+TODAS\s+LAS\s+CENAS", re.IGNORECASE),
+    re.compile(r"^\s*\(", re.IGNORECASE),   # nutritional summary lines like (VERDURA + CARNE...)
 ]
 
 # Lines to SKIP entirely (don't stop, just drop this line)
 SKIP_RES = [
-    re.compile(r"DÍA\s+(MUNDIAL|INTERNACIONAL|NACIONAL|DEL)\b", re.IGNORECASE),
+    re.compile(r"DÍ?A\s+(MUNDIAL|INTERNACIONAL|NACIONAL|DEL)\b", re.IGNORECASE),  # DÍA or DIA
     re.compile(r"VACACIONES\b", re.IGNORECASE),
-    re.compile(r"DÍA\s+NO\s+LECTIVO\b", re.IGNORECASE),
+    re.compile(r"DÍ?A\s+NO\s+LECTIVO\b", re.IGNORECASE),
     re.compile(r"^\s*[\d\s]+$"),   # only digits/spaces
 ]
+
+# Regex helpers for description cleanup
+_PAREN_RE      = re.compile(r"\([^)]*\)")   # strip (allergen codes) and (ingredient lists)
+_STARTS_CONT   = re.compile(r"^(CON|DE|Y|A|AL|EN|SIN|CON EL|CON LA)\s", re.IGNORECASE)
+_ENDS_PREP     = re.compile(r"\b(AL|CON|DE|EN|A|SIN)\s*$", re.IGNORECASE)
 
 KCAL_RE    = re.compile(r"\d+\s*[Kk]cal")
 DAY_NUM_RE = re.compile(r"^\s*(\d{1,2})\b")
@@ -440,32 +447,87 @@ def _extract_day_number(text: str) -> int | None:
 
 def _extract_description(text: str) -> str:
     """
-    Keep only the main dish — stop at first fruit/dessert/calorie line.
-    Skip event-header lines without stopping.
+    Extract clean meal description:
+    - Strip allergen/ingredient parenthetical groups  e.g. (H, L) (PIMIENTO, PATATA…)
+    - Skip event headers (DÍA MUNDIAL…) and their orphan continuation lines
+    - Stop at dessert/fruit/calorie lines
+    - Group lines into max 2 courses using continuation heuristics
+    - Join courses with ' & '; apply sentence case
     """
     lines = text.splitlines()
     cleaned: list[str] = []
+    skip_next = 0   # skip N lines after an event-header skip (orphan tails)
 
     for line in lines:
         line = line.strip()
         if not line:
             continue
 
-        # Skip-only lines (event headers etc.)
+        # Strip parenthetical content (allergen codes, ingredient lists)
+        line = _PAREN_RE.sub("", line).strip()
+        line = re.sub(r"\s{2,}", " ", line)
+        if not line:
+            continue
+
+        # Skip orphan lines following event-headers (e.g. "DÍA MUNDIAL DE LA" → "SALUD")
+        if skip_next > 0:
+            skip_next -= 1
+            continue
+
+        # Skip event-header lines; also drop the next line (orphan tail)
         if any(p.search(line) for p in SKIP_RES):
+            skip_next = 1
             continue
         if re.fullmatch(r"\d{1,2}", line):   # bare day number
             continue
         if len(line) < 3:
             continue
 
-        # Stop collecting at fruit/dessert/calorie
+        # Stop collecting at fruit/dessert/calorie line
         if any(p.search(line) for p in STOP_RES):
             break
 
         cleaned.append(line)
 
-    desc = " ".join(cleaned).strip()
-    desc = re.sub(r"^\d{1,2}\s+", "", desc).strip()   # remove leading day number
-    desc = re.sub(r"\s{2,}", " ", desc)
-    return desc if len(desc) > 3 else ""
+    if not cleaned:
+        return ""
+
+    # Remove leading day number from first line
+    cleaned[0] = re.sub(r"^\d{1,2}\s+", "", cleaned[0]).strip()
+    if not cleaned[0]:
+        cleaned = cleaned[1:]
+    if not cleaned:
+        return ""
+
+    # ── Group lines into courses ───────────────────────────────────────────────
+    # A line continues the current course when:
+    #   • it starts with a continuation word (CON, DE, Y, A, AL, EN, SIN…), OR
+    #   • the previous line ended with a dangling preposition (AL, CON, DE…)
+    # Otherwise it starts a new course.  We keep at most 2 courses.
+    courses: list[list[str]] = []
+    current_course: list[str] = []
+
+    for line in cleaned:
+        if current_course:
+            prev = current_course[-1]
+            if _STARTS_CONT.match(line) or _ENDS_PREP.search(prev):
+                current_course.append(line)   # continuation
+            else:
+                courses.append(current_course)
+                if len(courses) >= 2:
+                    break   # max 2 courses
+                current_course = [line]
+        else:
+            current_course = [line]
+
+    if current_course and len(courses) < 2:
+        courses.append(current_course)
+
+    # Join lines within each course, then apply sentence case
+    course_texts = [
+        " ".join(parts).lower().capitalize()
+        for parts in courses
+    ]
+
+    result = " & ".join(course_texts)
+    return result if len(result) > 3 else ""
