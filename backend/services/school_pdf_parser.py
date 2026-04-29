@@ -58,8 +58,14 @@ SKIP_RES = [
 
 # Regex helpers for description cleanup
 _PAREN_RE      = re.compile(r"\([^)]*\)")   # strip (allergen codes) and (ingredient lists)
-_STARTS_CONT   = re.compile(r"^(CON|DE|Y|A|AL|EN|SIN|CON EL|CON LA)\s", re.IGNORECASE)
-_ENDS_PREP     = re.compile(r"\b(AL|CON|DE|EN|A|SIN)\s*$", re.IGNORECASE)
+_STARTS_CONT   = re.compile(
+    r"^(CON|DE|Y|A|AL|EN|SIN|CON EL|CON LA"
+    r"|[A-ZÁÉÍÓÚÑÜ]+ADAS?"    # Spanish past participles f: REHOGADAS, GUISADAS, SALTEADAS…
+    r"|[A-ZÁÉÍÓÚÑÜ]+ADOS?"    # Spanish past participles m: ASADO, ESTOFADO…
+    r")\s",
+    re.IGNORECASE,
+)
+_ENDS_PREP     = re.compile(r"\b(AL|CON|DE|EN|A|SIN|Y)\s*$", re.IGNORECASE)
 
 KCAL_RE    = re.compile(r"\d+\s*[Kk]cal")
 DAY_NUM_RE = re.compile(r"^\s*(\d{1,2})\b")
