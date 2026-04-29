@@ -49,8 +49,8 @@ STOP_RES = [
 
 # Skip + eat next orphan line (event headers like "DÍA MUNDIAL DE LA" → "SALUD")
 EVENT_SKIP_RES = [
-    re.compile(r"DÍ?A\s+(MUNDIAL|INTERNACIONAL|NACIONAL|DEL)\b", re.IGNORECASE),
-    re.compile(r"DÍ?A\s+NO\s+LECTIVO\b", re.IGNORECASE),
+    re.compile(r"D[IÍ]A\s+(MUNDIAL|INTERNACIONAL|NACIONAL|DEL)\b", re.IGNORECASE),  # DÍA or DIA
+    re.compile(r"D[IÍ]A\s+NO\s+LECTIVO\b", re.IGNORECASE),
 ]
 
 # Skip just this line (no orphan-tail effect)
@@ -68,11 +68,12 @@ SKIP_RES = EVENT_SKIP_RES + LABEL_SKIP_RES
 _PAREN_RE      = re.compile(r"\([^)]*\)")   # strip (allergen codes) and (ingredient lists)
 _STARTS_CONT   = re.compile(
     r"^(CON|DE|Y|A|AL|EN|SIN|CON EL|CON LA"
-    r"|[A-ZÁÉÍÓÚÑÜ]+ADAS?"    # Spanish past participles f: REHOGADAS, GUISADAS, SALTEADAS…
-    r"|[A-ZÁÉÍÓÚÑÜ]+ADOS?"    # Spanish past participles m: ASADO, ESTOFADO…
-    r")\s",
+    r"|[A-ZÁÉÍÓÚÑÜ]+ADAS?"    # feminine past participles: REHOGADAS, GUISADAS, SALTEADAS…
+    r")(\s|$)",                # allow single-word lines (no trailing space required)
     re.IGNORECASE,
 )
+# Note: masculine -ADOS (ASADO, ESTOFADO…) removed — "PESCADO" ends in -ADO causing
+# false-positives. Single-word adjectives are handled by the min-words rule below.
 _ENDS_PREP     = re.compile(r"\b(AL|CON|DE|EN|A|SIN|Y)\s*$", re.IGNORECASE)
 
 KCAL_RE    = re.compile(r"\d+\s*[Kk]cal")
@@ -557,7 +558,7 @@ def _extract_description(text: str) -> str:
             prev = current_course[-1]
             if (_STARTS_CONT.match(line)
                     or _ENDS_PREP.search(prev)
-                    or current_words < 2):      # force continuation: course too short
+                    or (len(line.split()) == 1 and current_words < 4)):  # single-word adjective continuation
                 current_course.append(line)
             else:
                 courses.append(current_course)
