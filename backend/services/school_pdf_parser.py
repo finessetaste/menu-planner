@@ -469,6 +469,10 @@ def _extract_description(text: str) -> str:
         if not line:
             continue
 
+        # Bare day number — skip silently, no orphan-tail effect
+        if re.fullmatch(r"\d{1,2}", line):
+            continue
+
         # Skip orphan lines following event-headers (e.g. "DÍA MUNDIAL DE LA" → "SALUD")
         if skip_next > 0:
             skip_next -= 1
@@ -478,8 +482,7 @@ def _extract_description(text: str) -> str:
         if any(p.search(line) for p in SKIP_RES):
             skip_next = 1
             continue
-        if re.fullmatch(r"\d{1,2}", line):   # bare day number
-            continue
+
         if len(line) < 3:
             continue
 
