@@ -65,8 +65,8 @@ async def test_parse(file: UploadFile = File(...)):
                     "col_map": col_map,
                     "week_block_count": len(week_blocks),
                     "week_blocks_preview": [
-                        {str(k): v[:80] for k, v in wb.items() if v}
-                        for wb in week_blocks[:3]
+                        {str(k): v[:120] for k, v in wb.items() if v}
+                        for wb in week_blocks        # show ALL blocks
                     ],
                 })
 
@@ -171,11 +171,11 @@ def _ingest(pdf_path: str, girl: str, meal_type: str, year, db: Session):
         if meal_type != "both":
             meals = [m for m in meals if m["meal_type"] == meal_type]
 
-        # Keep only current week (Mon–Sun)
+        # Keep only current school week (Mon–Fri)
         today = date.today()
         week_mon = (today - timedelta(days=today.weekday())).isoformat()
-        week_sun = (today - timedelta(days=today.weekday()) + timedelta(days=6)).isoformat()
-        meals = [m for m in meals if week_mon <= m["date"] <= week_sun]
+        week_fri = (today - timedelta(days=today.weekday()) + timedelta(days=4)).isoformat()
+        meals = [m for m in meals if week_mon <= m["date"] <= week_fri]
 
         for m in meals:
             db.add(SchoolMeal(
