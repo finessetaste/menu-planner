@@ -45,16 +45,24 @@ STOP_RES = [
     re.compile(r"\bNATILLAS?\b|\bHELADO\b|\bGELATINA\b|\bFLAN\b|\bMACEDONIA\b", re.IGNORECASE),
     re.compile(r"\bMELOCOTÓN\b|\bCUAJADA\b|\bCOMPOTA\b", re.IGNORECASE),
     re.compile(r"EN\s+TODAS\s+LAS\s+CENAS", re.IGNORECASE),
-    re.compile(r"^\s*\(", re.IGNORECASE),   # nutritional summary lines like (VERDURA + CARNE...)
 ]
 
-# Lines to SKIP entirely (don't stop, just drop this line)
-SKIP_RES = [
-    re.compile(r"DÍ?A\s+(MUNDIAL|INTERNACIONAL|NACIONAL|DEL)\b", re.IGNORECASE),  # DÍA or DIA
-    re.compile(r"VACACIONES\b", re.IGNORECASE),
+# Skip + eat next orphan line (event headers like "DÍA MUNDIAL DE LA" → "SALUD")
+EVENT_SKIP_RES = [
+    re.compile(r"DÍ?A\s+(MUNDIAL|INTERNACIONAL|NACIONAL|DEL)\b", re.IGNORECASE),
     re.compile(r"DÍ?A\s+NO\s+LECTIVO\b", re.IGNORECASE),
-    re.compile(r"^\s*[\d\s]+$"),   # only digits/spaces
 ]
+
+# Skip just this line (no orphan-tail effect)
+LABEL_SKIP_RES = [
+    re.compile(r"VACACIONES\b", re.IGNORECASE),
+    re.compile(r"^\s*[\d\s]+$"),                    # digit-only rows
+    re.compile(r"^COCINA\s+\w", re.IGNORECASE),     # theme labels: "COCINA ITALIANA"
+    re.compile(r"^\s*\("),                           # safety net: lines starting with (
+]
+
+# Keep SKIP_RES as alias used by old debug code
+SKIP_RES = EVENT_SKIP_RES + LABEL_SKIP_RES
 
 # Regex helpers for description cleanup
 _PAREN_RE      = re.compile(r"\([^)]*\)")   # strip (allergen codes) and (ingredient lists)
@@ -451,18 +459,41 @@ def _extract_day_number(text: str) -> int | None:
     return None
 
 
+def _join_multiline_parens(text: str) -> str:
+    """
+    Join multi-line parenthetical content onto one line so _PAREN_RE can strip it.
+    e.g. "(PICADA, ZANAHORIA,\nCEBOLLA, PIMIENTO)" → "(PICADA, ZANAHORIA, CEBOLLA, PIMIENTO)"
+    """
+    lines = text.splitlines()
+    result: list[str] = []
+    depth = 0
+    for line in lines:
+        if depth > 0 and result:
+            result[-1] += " " + line.strip()
+        else:
+            result.append(line)
+        depth += line.count("(") - line.count(")")
+        if depth < 0:
+            depth = 0
+    return "\n".join(result)
+
+
 def _extract_description(text: str) -> str:
     """
     Extract clean meal description:
-    - Strip allergen/ingredient parenthetical groups  e.g. (H, L) (PIMIENTO, PATATA…)
-    - Skip event headers (DÍA MUNDIAL…) and their orphan continuation lines
+    - Join multi-line parens first so _PAREN_RE can strip them completely
+    - Strip allergen/ingredient parenthetical groups
+    - Skip event headers (DÍA MUNDIAL…) + orphan lines; skip theme labels (COCINA ITALIANA)
     - Stop at dessert/fruit/calorie lines
-    - Group lines into max 2 courses using continuation heuristics
+    - Group lines into max 2 courses; force continuation when course < 2 words
     - Join courses with ' & '; apply sentence case
     """
+    # Pre-process: join multi-line parens onto one line
+    text = _join_multiline_parens(text)
+
     lines = text.splitlines()
     cleaned: list[str] = []
-    skip_next = 0   # skip N lines after an event-header skip (orphan tails)
+    skip_next = 0
 
     for line in lines:
         line = line.strip()
@@ -479,14 +510,18 @@ def _extract_description(text: str) -> str:
         if re.fullmatch(r"\d{1,2}", line):
             continue
 
-        # Skip orphan lines following event-headers (e.g. "DÍA MUNDIAL DE LA" → "SALUD")
+        # Skip orphan lines following event-headers
         if skip_next > 0:
             skip_next -= 1
             continue
 
-        # Skip event-header lines; also drop the next line (orphan tail)
-        if any(p.search(line) for p in SKIP_RES):
+        # Event headers: skip this line + eat next orphan line
+        if any(p.search(line) for p in EVENT_SKIP_RES):
             skip_next = 1
+            continue
+
+        # Label lines: skip just this line (no orphan effect)
+        if any(p.search(line) for p in LABEL_SKIP_RES):
             continue
 
         if len(line) < 3:
@@ -510,21 +545,24 @@ def _extract_description(text: str) -> str:
 
     # ── Group lines into courses ───────────────────────────────────────────────
     # A line continues the current course when:
-    #   • it starts with a continuation word (CON, DE, Y, A, AL, EN, SIN…), OR
-    #   • the previous line ended with a dangling preposition (AL, CON, DE…)
-    # Otherwise it starts a new course.  We keep at most 2 courses.
+    #   • it starts with a continuation word (CON, DE, Y, AL, REHOGADAS…), OR
+    #   • the previous line ended with a dangling preposition, OR
+    #   • the current course has < 2 words (too short to be a complete dish)
     courses: list[list[str]] = []
     current_course: list[str] = []
 
     for line in cleaned:
         if current_course:
+            current_words = sum(len(l.split()) for l in current_course)
             prev = current_course[-1]
-            if _STARTS_CONT.match(line) or _ENDS_PREP.search(prev):
-                current_course.append(line)   # continuation
+            if (_STARTS_CONT.match(line)
+                    or _ENDS_PREP.search(prev)
+                    or current_words < 2):      # force continuation: course too short
+                current_course.append(line)
             else:
                 courses.append(current_course)
                 if len(courses) >= 2:
-                    break   # max 2 courses
+                    break
                 current_course = [line]
         else:
             current_course = [line]
@@ -532,7 +570,6 @@ def _extract_description(text: str) -> str:
     if current_course and len(courses) < 2:
         courses.append(current_course)
 
-    # Join lines within each course, join courses with ' & ', then sentence case globally
     course_texts = [" ".join(parts) for parts in courses]
     result = " & ".join(course_texts).lower().capitalize()
     return result if len(result) > 3 else ""
