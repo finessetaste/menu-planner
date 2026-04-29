@@ -72,7 +72,14 @@ async def test_parse(file: UploadFile = File(...)):
 
         return {
             "meal_count": len(meals),
-            "meals_preview": meals[:5],
+            "all_meals": meals,                        # full list, not just first 5
+            "last_week_raw": {                         # untruncated last block per page
+                str(i): {
+                    str(k): v
+                    for k, v in pages_info[i]["week_blocks_preview"][-1].items()
+                } if pages_info[i]["week_blocks_preview"] else {}
+                for i in range(len(pages_info))
+            },
             "global_yr": global_yr,
             "global_month": global_month,
             "pages": pages_info,
