@@ -171,6 +171,12 @@ def _ingest(pdf_path: str, girl: str, meal_type: str, year, db: Session):
         if meal_type != "both":
             meals = [m for m in meals if m["meal_type"] == meal_type]
 
+        # Keep only current week (Mon–Sun)
+        today = date.today()
+        week_mon = (today - timedelta(days=today.weekday())).isoformat()
+        week_sun = (today - timedelta(days=today.weekday()) + timedelta(days=6)).isoformat()
+        meals = [m for m in meals if week_mon <= m["date"] <= week_sun]
+
         for m in meals:
             db.add(SchoolMeal(
                 girl=girl,
