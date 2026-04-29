@@ -526,11 +526,7 @@ def _extract_description(text: str) -> str:
     if current_course and len(courses) < 2:
         courses.append(current_course)
 
-    # Join lines within each course, then apply sentence case
-    course_texts = [
-        " ".join(parts).lower().capitalize()
-        for parts in courses
-    ]
-
-    result = " & ".join(course_texts)
+    # Join lines within each course, join courses with ' & ', then sentence case globally
+    course_texts = [" ".join(parts) for parts in courses]
+    result = " & ".join(course_texts).lower().capitalize()
     return result if len(result) > 3 else ""
