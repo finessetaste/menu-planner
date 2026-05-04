@@ -8,12 +8,13 @@ from routers import recipes, weekly_plan, shopping, config, pdf_upload, girls_di
 
 
 PHOTOS_DIR = "/data/photos" if os.path.isdir("/data") else "static/photos"
+# Create immediately at import time so StaticFiles mount doesn't crash
+os.makedirs(PHOTOS_DIR, exist_ok=True)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    os.makedirs(PHOTOS_DIR, exist_ok=True)
     _migrate_cena_to_comida_cena()
     yield
 
