@@ -76,6 +76,14 @@ def _ingest(pdf_path: str, db: Session):
                 )
 
         db.commit()
+
+        # Normalise tipos: cena → comida_cena, comida → desayuno
+        TIPO_MAP = {"cena": "comida_cena", "comida": "desayuno"}
+        for old, new in TIPO_MAP.items():
+            for r in db.query(Recipe).filter(Recipe.tipo == old).all():
+                r.tipo = new
+        db.commit()
+
         _ingest_status = {
             "state": "done",
             "message": f"{len(recipes_data)} recetas importadas",
