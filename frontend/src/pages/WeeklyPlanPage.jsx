@@ -63,8 +63,8 @@ export default function WeeklyPlanPage() {
   // Slot → which recipe tipos are valid (mirrors backend SLOT_COMPATIBLE_TYPES)
   const SLOT_COMPATIBLE = {
     desayuno: ["desayuno", "comida"],
-    comida:   ["comida", "cena"],
-    cena:     ["cena"],
+    comida:   ["comida", "comida_cena"],
+    cena:     ["cena", "comida_cena"],
     snack:    ["snack"],
   };
 

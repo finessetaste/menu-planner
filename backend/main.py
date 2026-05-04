@@ -11,7 +11,25 @@ from routers import recipes, weekly_plan, shopping, config, pdf_upload, girls_di
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     os.makedirs("static/photos", exist_ok=True)
+    _migrate_cena_to_comida_cena()
     yield
+
+
+def _migrate_cena_to_comida_cena():
+    """One-time migration: rename tipo 'cena' → 'comida_cena' for all recipes."""
+    from sqlalchemy.orm import Session
+    from models import Recipe
+    db: Session = next(__import__("database").get_db())
+    try:
+        updated = db.query(Recipe).filter(Recipe.tipo == "cena").all()
+        for r in updated:
+            r.tipo = "comida_cena"
+        if updated:
+            db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
 
 
 app = FastAPI(title="Menu Planner API", lifespan=lifespan)

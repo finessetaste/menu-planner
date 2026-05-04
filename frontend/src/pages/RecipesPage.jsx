@@ -1,12 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
 
-const TIPOS = ["desayuno", "comida", "cena", "snack"];
+const TIPOS = ["desayuno", "comida", "comida_cena", "cena", "snack"];
+const TIPO_LABELS = {
+  desayuno:   "Desayuno",
+  comida:     "Comida",
+  comida_cena:"Comida / Cena",
+  cena:       "Cena",
+  snack:      "Snack",
+};
 const TIPO_COLORS = {
-  desayuno: "bg-yellow-100 text-yellow-800",
-  comida:   "bg-green-100 text-green-800",
-  cena:     "bg-blue-100 text-blue-800",
-  snack:    "bg-purple-100 text-purple-800",
+  desayuno:   "bg-yellow-100 text-yellow-800",
+  comida:     "bg-green-100 text-green-800",
+  comida_cena:"bg-orange-100 text-orange-800",
+  cena:       "bg-blue-100 text-blue-800",
+  snack:      "bg-purple-100 text-purple-800",
 };
 
 export default function RecipesPage() {
@@ -152,7 +160,7 @@ export default function RecipesPage() {
           >
             <option value="">Todos</option>
             {TIPOS.map((t) => (
-              <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+              <option key={t} value={t}>{TIPO_LABELS[t] || t}</option>
             ))}
           </select>
           <span className="text-sm text-gray-400 self-center">{filtered.length} recetas</span>
@@ -186,7 +194,7 @@ export default function RecipesPage() {
                   value={editData.tipo ?? r.tipo}
                   onChange={(e) => setEditData((d) => ({ ...d, tipo: e.target.value }))}
                 >
-                  {TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {TIPOS.map((t) => <option key={t} value={t}>{TIPO_LABELS[t] || t}</option>)}
                 </select>
                 <input
                   className="w-full border border-gray-200 rounded px-2 py-1 text-sm"
@@ -203,7 +211,7 @@ export default function RecipesPage() {
               <>
                 <p className="font-semibold text-sm leading-snug">{r.nombre}</p>
                 <div className="flex gap-1.5 flex-wrap">
-                  <span className={`badge ${TIPO_COLORS[r.tipo]}`}>{r.tipo}</span>
+                  <span className={`badge ${TIPO_COLORS[r.tipo] || "bg-gray-100 text-gray-700"}`}>{TIPO_LABELS[r.tipo] || r.tipo}</span>
                   {r.subtipo && <span className="badge bg-gray-100 text-gray-600">{r.subtipo}</span>}
                   {r.page_number && (
                     <span className="badge bg-gray-50 text-gray-400">p.{r.page_number}</span>

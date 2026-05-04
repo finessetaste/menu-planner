@@ -13,8 +13,8 @@ MEAL_TYPES = ["desayuno", "comida", "cena", "snack"]
 # Which recipe tipos are valid for each slot type
 SLOT_COMPATIBLE_TYPES: dict[str, set[str]] = {
     "desayuno": {"desayuno", "comida"},
-    "comida":   {"comida", "cena"},
-    "cena":     {"cena"},
+    "comida":   {"comida", "comida_cena"},
+    "cena":     {"cena", "comida_cena"},
     "snack":    {"snack"},
 }
 
