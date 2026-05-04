@@ -7,10 +7,13 @@ from database import engine, Base
 from routers import recipes, weekly_plan, shopping, config, pdf_upload, girls_dinners
 
 
+PHOTOS_DIR = "/data/photos" if os.path.isdir("/data") else "static/photos"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    os.makedirs("static/photos", exist_ok=True)
+    os.makedirs(PHOTOS_DIR, exist_ok=True)
     _migrate_cena_to_comida_cena()
     yield
 
@@ -42,7 +45,7 @@ app.include_router(pdf_upload.router,    prefix="/api/pdf",           tags=["pdf
 app.include_router(girls_dinners.router, prefix="/api/girls-dinners", tags=["girls-dinners"])
 
 # Serve recipe photos
-app.mount("/photos", StaticFiles(directory="static/photos"), name="photos")
+app.mount("/photos", StaticFiles(directory=PHOTOS_DIR), name="photos")
 
 # Serve React SPA
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

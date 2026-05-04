@@ -9,7 +9,7 @@ from services.pdf_parser import parse_pdf
 
 router = APIRouter()
 
-PHOTOS_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "photos")
+PHOTOS_DIR = "/data/photos" if os.path.isdir("/data") else os.path.join(os.path.dirname(__file__), "..", "static", "photos")
 _ingest_status: dict = {"state": "idle", "message": "", "count": 0}
 
 
