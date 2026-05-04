@@ -10,6 +10,14 @@ router = APIRouter()
 
 MEAL_TYPES = ["desayuno", "comida", "cena", "snack"]
 
+# Which recipe tipos are valid for each slot type
+SLOT_COMPATIBLE_TYPES: dict[str, set[str]] = {
+    "desayuno": {"desayuno", "comida"},
+    "comida":   {"comida", "cena"},
+    "cena":     {"cena"},
+    "snack":    {"snack"},
+}
+
 
 def _monday(d: date) -> str:
     return (d - timedelta(days=d.weekday())).isoformat()
@@ -82,6 +90,38 @@ def patch_day(day_id: int, patch: WeekDayPatch, db: Session = Depends(get_db)):
     return day
 
 
+@router.post("/copy-from-previous", response_model=dict)
+def copy_from_previous_week(week_start: str | None = None, db: Session = Depends(get_db)):
+    """Copy all non-fixed meal slot selections from the previous week into the given week."""
+    ws = week_start or _monday(date.today())
+    prev_ws = (date.fromisoformat(ws) - timedelta(weeks=1)).isoformat()
+
+    prev_days = db.query(WeekDay).filter(WeekDay.week_start == prev_ws).all()
+    if not prev_days:
+        raise HTTPException(404, "No hay datos de la semana anterior para copiar")
+
+    current_days = _get_or_create_week(db, ws)
+    prev_map = {d.day_index: d for d in prev_days}
+
+    copied = 0
+    for day in current_days:
+        prev_day = prev_map.get(day.day_index)
+        if not prev_day:
+            continue
+        for slot in day.meal_slots:
+            if slot.is_fixed:
+                continue
+            prev_slot = next(
+                (s for s in prev_day.meal_slots if s.meal_type == slot.meal_type), None
+            )
+            if prev_slot and prev_slot.recipe_id:
+                slot.recipe_id = prev_slot.recipe_id
+                copied += 1
+
+    db.commit()
+    return {"ok": True, "copied": copied}
+
+
 @router.patch("/slot/{slot_id}", response_model=dict)
 def patch_slot(slot_id: int, patch: MealSlotPatch, db: Session = Depends(get_db)):
     slot = db.get(MealSlot, slot_id)
@@ -93,7 +133,8 @@ def patch_slot(slot_id: int, patch: MealSlotPatch, db: Session = Depends(get_db)
         r = db.get(Recipe, patch.recipe_id)
         if not r:
             raise HTTPException(404, "Recipe not found")
-        if r.tipo != slot.meal_type:
+        compatible = SLOT_COMPATIBLE_TYPES.get(slot.meal_type, {slot.meal_type})
+        if r.tipo not in compatible:
             raise HTTPException(400, f"Receta de tipo '{r.tipo}' no encaja en slot '{slot.meal_type}'")
     slot.recipe_id = patch.recipe_id if patch.recipe_id != 0 else None
     db.commit()

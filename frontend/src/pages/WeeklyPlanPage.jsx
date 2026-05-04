@@ -20,6 +20,7 @@ export default function WeeklyPlanPage() {
   const [days, setDays] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [copying, setCopying] = useState(false);
 
   const weekStart = monday(weekOffset);
 
@@ -34,6 +35,21 @@ export default function WeeklyPlanPage() {
     setDays((prev) => prev.map((d) => (d.id === id ? updated : d)));
   }
 
+  async function copyFromPrevious() {
+    if (!confirm("¿Copiar las recetas de la semana anterior en esta semana?")) return;
+    setCopying(true);
+    try {
+      const { copied } = await api.weeklyPlan.copyFromPrevious(weekStart);
+      const fresh = await api.weeklyPlan.get(weekStart);
+      setDays(fresh);
+      alert(`${copied} recetas copiadas de la semana anterior.`);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setCopying(false);
+    }
+  }
+
   async function patchSlot(slotId, recipeId) {
     try {
       await api.weeklyPlan.patchSlot(slotId, { recipe_id: recipeId || 0 });
@@ -44,8 +60,17 @@ export default function WeeklyPlanPage() {
     }
   }
 
+  // Slot → which recipe tipos are valid (mirrors backend SLOT_COMPATIBLE_TYPES)
+  const SLOT_COMPATIBLE = {
+    desayuno: ["desayuno", "comida"],
+    comida:   ["comida", "cena"],
+    cena:     ["cena"],
+    snack:    ["snack"],
+  };
+
   function recipesForType(tipo) {
-    return recipes.filter((r) => r.tipo === tipo);
+    const valid = SLOT_COMPATIBLE[tipo] || [tipo];
+    return recipes.filter((r) => valid.includes(r.tipo));
   }
 
   if (loading) return <div className="text-center py-16 text-gray-400">Cargando…</div>;
@@ -60,6 +85,16 @@ export default function WeeklyPlanPage() {
           {weekOffset === 0 && <span className="ml-2 text-xs text-brand-600 font-medium">Esta semana</span>}
         </h1>
         <button className="btn-ghost" onClick={() => setWeekOffset((o) => o + 1)}>Sig. →</button>
+      </div>
+      <div className="flex justify-end">
+        <button
+          className="btn-ghost text-xs flex items-center gap-1 text-gray-500 hover:text-brand-600"
+          onClick={copyFromPrevious}
+          disabled={copying}
+          title="Copia todas las recetas de la semana anterior a esta semana"
+        >
+          {copying ? "Copiando…" : "📋 Copiar semana anterior"}
+        </button>
       </div>
 
       {recipes.length === 0 && (

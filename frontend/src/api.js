@@ -42,9 +42,10 @@ export const api = {
   },
 
   weeklyPlan: {
-    get:      (weekStart) => req("GET",   `/weekly-plan/?week_start=${weekStart || ""}`),
-    patchDay: (id, data)  => req("PATCH", `/weekly-plan/${id}`, data),
-    patchSlot:(id, data)  => req("PATCH", `/weekly-plan/slot/${id}`, data),
+    get:             (weekStart) => req("GET",   `/weekly-plan/?week_start=${weekStart || ""}`),
+    patchDay:        (id, data)  => req("PATCH", `/weekly-plan/${id}`, data),
+    patchSlot:       (id, data)  => req("PATCH", `/weekly-plan/slot/${id}`, data),
+    copyFromPrevious:(weekStart) => req("POST",  `/weekly-plan/copy-from-previous?week_start=${weekStart || ""}`),
   },
 
   shopping: {
