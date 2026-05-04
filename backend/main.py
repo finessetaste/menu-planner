@@ -37,6 +37,28 @@ def _migrate_recipe_tipos():
 
 app = FastAPI(title="Menu Planner API", lifespan=lifespan)
 
+
+@app.get("/api/fix-tipos")
+def fix_tipos_toplevel():
+    from database import get_db
+    from models import Recipe
+    db = next(get_db())
+    try:
+        changed = 0
+        for old, new in [("cena", "comida_cena"), ("comida", "desayuno")]:
+            rows = db.query(Recipe).filter(Recipe.tipo == old).all()
+            for r in rows:
+                r.tipo = new
+                changed += 1
+        db.commit()
+        return {"ok": True, "changed": changed}
+    except Exception as e:
+        db.rollback()
+        return {"ok": False, "error": str(e)}
+    finally:
+        db.close()
+
+
 app.include_router(recipes.router,     prefix="/api/recipes",     tags=["recipes"])
 app.include_router(weekly_plan.router, prefix="/api/weekly-plan", tags=["weekly-plan"])
 app.include_router(shopping.router,    prefix="/api/shopping",    tags=["shopping"])
