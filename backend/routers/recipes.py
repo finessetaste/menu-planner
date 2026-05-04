@@ -67,7 +67,7 @@ def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.post("/fix-tipos")
+@router.get("/fix-tipos")
 def fix_tipos(db: Session = Depends(get_db)):
     """Manually fix legacy tipos: cena→comida_cena, comida→desayuno."""
     changed = 0
