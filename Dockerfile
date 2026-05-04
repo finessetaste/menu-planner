@@ -13,7 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY frontend/ frontend/
 RUN cd frontend && npm install && npm run build
 
-# Backend
+# Backend — bump CACHEBUST to force layer rebuild when HF cache sticks
+ARG CACHEBUST=2
 COPY backend/ backend/
 RUN mkdir -p backend/static/photos
 
