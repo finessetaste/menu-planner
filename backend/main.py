@@ -15,21 +15,20 @@ os.makedirs(PHOTOS_DIR, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    _migrate_cena_to_comida_cena()
+    _migrate_recipe_tipos()
     yield
 
 
-def _migrate_cena_to_comida_cena():
-    """One-time migration: rename tipo 'cena' → 'comida_cena' for all recipes."""
-    from sqlalchemy.orm import Session
+def _migrate_recipe_tipos():
+    """Migrate legacy tipos: 'cena' → 'comida_cena', 'comida' → 'desayuno'."""
     from models import Recipe
-    db: Session = next(__import__("database").get_db())
+    db = next(__import__("database").get_db())
     try:
-        updated = db.query(Recipe).filter(Recipe.tipo == "cena").all()
-        for r in updated:
-            r.tipo = "comida_cena"
-        if updated:
-            db.commit()
+        for old, new in [("cena", "comida_cena"), ("comida", "desayuno")]:
+            rows = db.query(Recipe).filter(Recipe.tipo == old).all()
+            for r in rows:
+                r.tipo = new
+        db.commit()
     except Exception:
         db.rollback()
     finally:

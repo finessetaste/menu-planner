@@ -22,7 +22,7 @@ from typing import Optional
 
 MEAL_SECTIONS: dict[str, str] = {
     "DESAYUNOS": "desayuno", "DESAYUNO": "desayuno",
-    "COMIDAS": "comida",     "COMIDA": "comida",
+    "COMIDAS": "desayuno",   "COMIDA": "desayuno",
     "CENAS": "comida_cena",  "CENA": "comida_cena",
     "SNACKS": "snack",       "SNACK": "snack",
     "MERIENDA": "snack",     "MERIENDAS": "snack",

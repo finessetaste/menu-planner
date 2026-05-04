@@ -1,19 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
 
-const TIPOS = ["desayuno", "comida", "comida_cena", "cena", "snack"];
+const TIPOS = ["desayuno", "comida_cena", "snack"];
 const TIPO_LABELS = {
   desayuno:   "Desayuno",
-  comida:     "Comida",
   comida_cena:"Comida / Cena",
-  cena:       "Cena",
   snack:      "Snack",
 };
 const TIPO_COLORS = {
   desayuno:   "bg-yellow-100 text-yellow-800",
-  comida:     "bg-green-100 text-green-800",
   comida_cena:"bg-orange-100 text-orange-800",
-  cena:       "bg-blue-100 text-blue-800",
   snack:      "bg-purple-100 text-purple-800",
 };
 
