@@ -21,6 +21,19 @@ def list_recipes(
     return q.order_by(Recipe.tipo, Recipe.nombre).all()
 
 
+@router.get("/fix-tipos")
+def fix_tipos(db: Session = Depends(get_db)):
+    """Manually fix legacy tipos: cena→comida_cena, comida→desayuno."""
+    changed = 0
+    for old, new in [("cena", "comida_cena"), ("comida", "desayuno")]:
+        rows = db.query(Recipe).filter(Recipe.tipo == old).all()
+        for r in rows:
+            r.tipo = new
+            changed += 1
+    db.commit()
+    return {"ok": True, "changed": changed}
+
+
 @router.get("/{recipe_id}", response_model=RecipeOut)
 def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
     r = db.get(Recipe, recipe_id)
@@ -65,16 +78,3 @@ def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
     db.delete(r)
     db.commit()
     return {"ok": True}
-
-
-@router.get("/fix-tipos")
-def fix_tipos(db: Session = Depends(get_db)):
-    """Manually fix legacy tipos: cena→comida_cena, comida→desayuno."""
-    changed = 0
-    for old, new in [("cena", "comida_cena"), ("comida", "desayuno")]:
-        rows = db.query(Recipe).filter(Recipe.tipo == old).all()
-        for r in rows:
-            r.tipo = new
-            changed += 1
-    db.commit()
-    return {"ok": True, "changed": changed}
